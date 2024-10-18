@@ -1,0 +1,751 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Extrude polygons for 3D indoor mapping</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
+
+    <script src="js/togeojson.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
+
+    <script
+        src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.min.js"></script>
+    <link rel="stylesheet"
+        href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.css"
+        type="text/css">
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Montserrat, sans-serif, Helvetica, Arial;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .mapboxgl-popup {
+            max-width: 400px !important;
+        }
+
+        /* SWITCHER */
+        .switcher-div {
+            display: flex;
+            align-items: center;
+            margin: 5px;
+            width: fit-content;
+        }
+
+        .switcher-div>div {
+            margin-left: 5px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 35px;
+            height: 15px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            -webkit-transition: 0.4s;
+            transition: 0.4s;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 11px;
+            width: 11px;
+            left: 3px;
+            bottom: 2px;
+            background-color: white;
+            -webkit-transition: 0.4s;
+            transition: 0.4s;
+        }
+
+        input:checked+.slider {
+            background-color: #2196f3;
+        }
+
+        input:focus+.slider {
+            box-shadow: 0 0 1px #2196f3;
+        }
+
+        input:checked+.slider:before {
+            -webkit-transform: translateX(18px);
+            -ms-transform: translateX(18px);
+            transform: translateX(18px);
+        }
+
+        .slider.round {
+            border-radius: 34px;
+        }
+
+        .slider.round:before {
+            border-radius: 50%;
+        }
+
+        .info-button {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 1;
+            border: 5px solid black;
+            border-radius: 10px;
+            background-color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 50px;
+            height: 50px;
+            font-size: 25px;
+            cursor: pointer;
+        }
+
+        /* SWITCHER END */
+
+        #container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        #header {
+            /* background: #2196f3; */
+            /* color: white; */
+            padding: 10px;
+            text-align: center;
+            font-weight: 900 !important;
+            font-family: inherit;
+            font-size: 44px;
+        }
+
+        #toggle {
+            position: absolute;
+            top: 100px;
+            left: 10px;
+            z-index: 1;
+            background-color: #2196f3;
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        #toggle:hover {
+            background-color: #0d47a1;
+        }
+
+        #layers {
+            position: absolute;
+            top: 100px;
+            left: 10px;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+            border: 2px solid #2196f3;
+            transition: 500ms;
+        }
+
+        .close-button {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            cursor: pointer;
+            background: red;
+            color: white;
+            border-radius: 100%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .close-button:after {
+            display: inline-block;
+            content: "\00d7";
+            /* This will render the 'X' */
+        }
+
+        .close-button:hover {
+            background: darkred;
+        }
+
+        .icon-container {
+            width: 15px;
+            height: 15px;
+            border: 1px solid #333;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .icon::before,
+        .icon::after {
+            content: '';
+            position: absolute;
+            background-color: #333;
+        }
+
+        .icon::before {
+            width: 7px;
+            height: 1px;
+            top: 7px;
+            left: 4px;
+        }
+
+        .icon::after {
+            width: 1px;
+            height: 7px;
+            top: 4px;
+            left: 7px;
+        }
+
+        /* For minus state */
+        .icon-container.minus .icon::after {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="header">Atlanta Development Map</div>
+        <div id="map"></div>
+    </div>
+
+    <div id="toggle">
+        <svg width="30px" height="30px" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <g id="SVGRepo_iconCarrier">
+                <path
+                    d="M4.97883 9.68508C2.99294 8.89073 2 8.49355 2 8C2 7.50645 2.99294 7.10927 4.97883 6.31492L7.7873 5.19153C9.77318 4.39718 10.7661 4 12 4C13.2339 4 14.2268 4.39718 16.2127 5.19153L19.0212 6.31492C21.0071 7.10927 22 7.50645 22 8C22 8.49355 21.0071 8.89073 19.0212 9.68508L16.2127 10.8085C14.2268 11.6028 13.2339 12 12 12C10.7661 12 9.77318 11.6028 7.7873 10.8085L4.97883 9.68508Z"
+                    fill="#ffffff" />
+                <path fill-rule="evenodd" clip-rule="evenodd"
+                    d="M2 8C2 8.49355 2.99294 8.89073 4.97883 9.68508L7.7873 10.8085C9.77318 11.6028 10.7661 12 12 12C13.2339 12 14.2268 11.6028 16.2127 10.8085L19.0212 9.68508C21.0071 8.89073 22 8.49355 22 8C22 7.50645 21.0071 7.10927 19.0212 6.31492L16.2127 5.19153C14.2268 4.39718 13.2339 4 12 4C10.7661 4 9.77318 4.39718 7.7873 5.19153L4.97883 6.31492C2.99294 7.10927 2 7.50645 2 8Z"
+                    fill="#ffffff" />
+                <path
+                    d="M19.0212 13.6851L16.2127 14.8085C14.2268 15.6028 13.2339 16 12 16C10.7661 16 9.77318 15.6028 7.7873 14.8085L4.97883 13.6851C2.99294 12.8907 2 12.4935 2 12C2 11.5551 2.80681 11.1885 4.42043 10.5388L7.56143 11.7952C9.41007 12.535 10.572 13 12 13C13.428 13 14.5899 12.535 16.4386 11.7952L19.5796 10.5388C21.1932 11.1885 22 11.5551 22 12C22 12.4935 21.0071 12.8907 19.0212 13.6851Z"
+                    fill="#ffffff" />
+                <path
+                    d="M19.0212 17.6849L16.2127 18.8083C14.2268 19.6026 13.2339 19.9998 12 19.9998C10.7661 19.9998 9.77318 19.6026 7.7873 18.8083L4.97883 17.6849C2.99294 16.8905 2 16.4934 2 15.9998C2 15.5549 2.80681 15.1883 4.42043 14.5386L7.56143 15.795C9.41007 16.5348 10.572 16.9998 12 16.9998C13.428 16.9998 14.5899 16.5348 16.4386 15.795L19.5796 14.5386C21.1932 15.1883 22 15.5549 22 15.9998C22 16.4934 21.0071 16.8905 19.0212 17.6849Z"
+                    fill="#ffffff" />
+            </g>
+        </svg>
+        Data layers
+    </div>
+    <div id="layers"></div>
+
+    <script>
+
+        const enabledLayers = [
+            "Beltlilne Subareas",
+            "Atlanta BeltLine Trails",
+            "Atlanta BeltLine Trail Access Locations Public Open and Interim",
+            "MARTA Heavy Rail",
+        ]
+
+        const layersDiv = document.getElementById('layers')
+        layersDiv.style.left = -1000 + "px"
+
+        const toggleLayersButton = document.getElementById('toggle')
+        toggleLayersButton.addEventListener("click", () => {
+            layersDiv.style.left = 10 + "px"
+        })
+
+        const appData = {
+            features: null,
+            selectedLayers: []
+        }
+        mapboxgl.accessToken = 'pk.eyJ1IjoiY29qbyIsImEiOiJjbTFndHU1ZjMwN3owMmlxMXRlejlrMm9oIn0.ezRZvJl1XpcOF1Eqhc2iCg';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+            style: 'mapbox://styles/mapbox/light-v11',
+            center: { lng: -84.39489491038259, lat: 33.78638842087517 },
+            zoom: 12,
+        });
+
+        //add search bar
+        map.addControl(new MapboxGeocoder({
+            accessToken: mapboxgl.accessToken,
+            mapboxgl: mapboxgl
+        }));
+
+        map.on('load', () => {
+
+            const files = [
+                // 'data/BeltLine Access Points (Public Open and Interim).kml',
+                // 'data/BeltLine Trails.kml',
+                // 'data/1-Development Map.kmz',
+                'data/My Places.kml',
+                'data/ATL StreetCar.kmz',
+                'data/Future LRTBRT (Beltline Rail, Clifton Corr).kmz',
+                'data/MARTA Heavy Rail.kmz'
+            ]
+
+            Promise.all(files.map(file => fetch(file)))
+                .then(responses => Promise.all(responses.map(response => response.blob())))
+                .then(blobs => Promise.all(blobs.map(blob => {
+                    console.log('blob', blob);
+
+                    if (blob.type === "application/vnd.google-earth.kmz") {
+                        const zip = new JSZip();
+                        return zip.loadAsync(blob).then(zip => {
+                            return zip.file("doc.kml").async("string").then(data => {
+                                const kml = new DOMParser().parseFromString(data, "text/xml");
+                                return toGeoJSON.kml(kml);
+                            });
+                        });
+                    } else {
+                        return blob.text().then(data => {
+                            const kml = new DOMParser().parseFromString(data, "text/xml");
+                            return toGeoJSON.kml(kml);
+                        });
+                    }
+                })))
+                .then(geojsons => {
+
+                    console.log('geojsons', geojsons);
+
+                    const features = geojsons.reduce((acc, geojson) => {
+                        return acc.concat(geojson.features);
+                    }, []);
+
+                    const layerNames = [...new Set(features.map(f => f.properties.layerName))]
+                    console.log('layerNames', layerNames);
+
+                    const closeButton = document.createElement("div")
+                    closeButton.className = "close-button"
+                    closeButton.addEventListener("click", () => {
+                        layersDiv.style.left = -1000 + "px"
+                    })
+                    layersDiv.appendChild(closeButton);
+
+                    //-------------GROUP------------
+                    const groupedToggles = [];
+
+                    const groupLayer = document.createElement("div")
+                    groupLayer.className = "group-layer"
+
+                    const container = document.createElement("div")
+                    container.style = "display: flex; flex-direction: row; align-items: center"
+
+                    const groupSwitcher = buildSwitcher({
+                        labelText: "Atlanta Development Map",
+                        action: checked => {
+                            if (checked) {
+                                groupedToggles.forEach(toggle => {
+                                    toggle.turnOn()
+                                })
+                            } else {
+                                groupedToggles.forEach(toggle => {
+                                    toggle.turnOff()
+                                })
+                            }
+                            updateLayersVisibility()
+                        },
+                        checked: false,
+                    })
+                    container.appendChild(groupSwitcher.nodeElement)
+
+                    const expandGroup = document.createElement("div");
+                    expandGroup.className = "icon-container";
+                    expandGroup.innerHTML = `<div class="icon"></div>`;
+
+                    const subGroup = document.createElement("div");
+                    subGroup.style.maxHeight = "0px";
+                    subGroup.style.marginLeft = "20px";
+                    subGroup.style.overflow = "hidden";
+                    subGroup.style.transition = "max-height 500ms ease-out";
+
+                    expandGroup.addEventListener("click", () => {
+                        expandGroup.classList.toggle("minus");
+                        if (!expandGroup.classList.contains("minus")) {
+                            subGroup.style.maxHeight = "0px";
+                        } else {
+                            subGroup.style.maxHeight = subGroup.scrollHeight + "px";
+                        }
+                    });
+
+                    container.appendChild(expandGroup);
+                    container.appendChild(subGroup);
+                    groupLayer.appendChild(container);
+
+                    groupLayer.appendChild(subGroup)
+                    layersDiv.appendChild(groupLayer);
+                    //-------------GROUP------------
+
+                    layerNames.forEach(layer => {
+
+                        const visibility = enabledLayers.includes(layer)
+
+                        appData.selectedLayers.push({
+                            layer,
+                            visibility: visibility
+                        })
+
+                        const property = buildSwitcher({
+                            labelText: layer,
+                            action: checked => {
+                                const display = checked ? "visible" : "none"
+                                const selLayer = appData.selectedLayers.find(l => l.layer === layer)
+                                selLayer.visibility = checked
+                                updateLayersVisibility()
+                            },
+                            checked: visibility
+                        })
+
+                        // if (leayerGroupNames.includes(layer)) {
+                        //     subGroup.appendChild(property.nodeElement);
+                        //     groupedToggles.push(property)
+                        // } else {
+                        //     layersDiv.appendChild(property.nodeElement);
+                        // }
+                        subGroup.appendChild(property.nodeElement);
+                        groupedToggles.push(property)
+                    })
+
+
+
+
+                    console.log('features', features);
+
+                    features.forEach(f => {
+                        if (f.geometry.type === "Point") {
+
+                            const styleColor = f.properties.styleMapHash ? f.properties.styleMapHash.normal : "white"
+                            console.log('styleColor', styleColor);
+                            const _color = styleColor.split("-")[2]
+                            console.log('_color', _color);
+
+                            f.properties.fill = "#" + _color || "white"
+                            f.properties.size = 12
+                            f.properties.iconName = 'tram'
+
+                            if (f.properties.name.includes("MARTA Station")) {
+                                f.properties.iconName = 'mstation'
+                            }
+                            if (f.properties.name.includes("Marta Stop")) {
+                                f.properties.iconName = 'mstop'
+                            }
+
+                            console.log('f.properties', f.properties);
+
+                            if (f.properties.icon && f.properties.icon.includes("Layer0_Symbol_")) {
+                                const color = f.properties.icon === 'Layer0_Symbol_f34c9f00_0.png' ? '#42c000' : '#c500ff'
+                                f.properties.fill = color
+                                f.properties.noicon = true
+                                f.properties.size = 5
+                            }
+                        }
+                    })
+
+                    appData.features = features
+                    // appData.selectedLayers.forEach(l => {
+                    //     if (!enabledLayers.includes(l.layer)) {
+                    //         l.visibility = false
+                    //     }
+                    // })
+                    updateLayersVisibility()
+
+
+                    // map.getSource('geometry').setData({
+                    //     'type': 'FeatureCollection',
+                    //     'features': features
+                    // });
+
+
+                });
+
+
+            // Create GeoJSON data for a building with 10 floors
+            map.addSource('geometry', {
+                'type': 'geojson',
+                'data': {
+                    'type': 'FeatureCollection',
+                    'features': []
+                }
+            });
+
+            map.addLayer({
+                id: 'polygons',
+                type: 'fill',
+                source: 'geometry',
+                paint: {
+                    'fill-color': ['get', 'fill'],
+                    'fill-opacity': 0.5
+                },
+                filter: ['==', '$type', 'Polygon']
+            });
+
+            map.addLayer({
+                id: 'polygons-hovered',
+                type: 'line',
+                source: 'geometry',
+                paint: {
+                    'line-color': "white",
+                    'line-width': 4
+                },
+
+            });
+
+            map.addLayer({
+                id: 'lines-hovered',
+                type: 'line',
+                source: 'geometry',
+                paint: {
+                    'line-color': "white",
+                    'line-width': ['+', ['get', 'stroke-width'], 8]
+                },
+            })
+
+            map.addLayer({
+                id: 'lines',
+                type: 'line',
+                source: 'geometry',
+                paint: {
+                    'line-color': ['get', 'stroke'],
+                    'line-width': ['get', 'stroke-width']
+                },
+                filter: ['==', '$type', 'LineString']
+            })
+
+
+            map.addLayer({
+                id: 'points',
+                type: 'circle',
+                source: 'geometry',
+                paint: {
+                    'circle-color': ['get', 'fill'],
+                    'circle-radius': ['get', 'size'],
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': "white"
+                },
+                filter: ['==', '$type', 'Point']
+            });
+
+
+            map.loadImage('images/marta-station.png', (error, image) => {
+                map.addImage('mstation', image);
+            })
+            map.loadImage('images/marta-stop.png', (error, image) => {
+                map.addImage('mstop', image);
+            })
+
+            map.loadImage(
+                'images/tram-svgrepo-com.png',
+                (error, image) => {
+                    if (error) throw error;
+
+                    // Add the image to the map style.
+                    map.addImage('tram', image);
+
+                    map.addLayer({
+                        id: 'points-hovered',
+                        type: 'circle',
+                        source: 'geometry',
+                        paint: {
+                            'circle-color': "red",
+                            'circle-radius': ['+', ['get', 'size'], 3]
+                        },
+                        filter: ['==', '$type', 'Point']
+                    });
+                    map.setFilter('points-hovered', ['==', 'name', '']);
+
+                    map.addLayer({
+                        id: 'tram-icon',
+                        type: 'symbol',
+                        source: 'geometry',
+                        layout: {
+                            'icon-image': ['get', 'iconName'],
+                            'icon-size': 0.8,
+                            'icon-allow-overlap': true
+                        },
+                        filter: ['all',
+                            ['==', '$type', 'Point'],
+                            ['!has', 'noicon']
+                        ]
+                    });
+
+                }
+            );
+
+            map.setFilter('polygons-hovered', ['==', 'name', '']);
+            map.setFilter('lines-hovered', ['==', 'name', '']);
+
+            function pointerCursor(e) {
+                map.getCanvas().style.cursor = 'pointer';
+            }
+
+            function defaultCursor() {
+                map.getCanvas().style.cursor = '';
+                map.setFilter('polygons-hovered', ['==', 'name', '']);
+                map.setFilter('lines-hovered', ['==', 'name', '']);
+                map.setFilter('points-hovered', ['==', 'name', '']);
+            }
+
+            map.on('mouseenter', 'polygons', pointerCursor);
+            map.on('mouseleave', 'polygons', defaultCursor);
+            map.on('mouseenter', 'points', pointerCursor);
+            map.on('mouseleave', 'points', defaultCursor);
+            map.on('mouseenter', 'lines', pointerCursor);
+            map.on('mouseleave', 'lines', defaultCursor);
+
+
+            map.on('mousemove', 'polygons', (e) => {
+                //add hover effect over polygon 
+                const props = e.features[0].properties
+                map.setFilter('polygons-hovered', ['==', 'name', e.features[0].properties.name]);
+            });
+            map.on('mousemove', 'lines', (e) => {
+                //add hover effect over line 
+                const props = e.features[0].properties
+                map.setFilter('lines-hovered', ['==', 'name', e.features[0].properties.name]);
+            });
+            map.on('mousemove', 'points', (e) => {
+                //add hover effect over point 
+                const props = e.features[0].properties
+                map.setFilter('points-hovered', ['==', 'name', e.features[0].properties.name]);
+            });
+
+            function showInfo(e) {
+                const features = map.queryRenderedFeatures(e.point);
+                //remove douplicates from features
+                const uniqueFeatures = features.filter((v, i, a) => a.findIndex(t => (t.properties.name === v.properties.name)) === i)
+                console.log('uniqueFeatures', uniqueFeatures);
+
+                const html = uniqueFeatures
+                    .filter(feature => feature.properties.name)
+                    .map(feature => {
+                        descr = feature.properties.description ? feature.properties.description : ""
+                        return `<h3>${feature.properties.name}</h3>
+                                ${descr}`
+                    })[0]
+                // .join('');
+
+                const popup = new mapboxgl.Popup()
+                    .setLngLat(e.lngLat)
+                    .setHTML(html)
+                    .addTo(map);
+            }
+
+            //create a popup with all properties for all layers on click
+
+            map.on('click', 'polygons', showInfo);
+            map.on('click', 'lines', showInfo);
+            map.on('click', 'points', showInfo);
+
+        });
+
+        const debounce = (func, delay) => {
+            let timeoutId;
+            return (...args) => {
+                clearTimeout(timeoutId);
+                timeoutId = setTimeout(() => func.apply(null, args), delay);
+            };
+        };
+
+        const updateLayersVisibility = debounce(() => {
+            const visibleLayers = appData.selectedLayers.filter(l => l.visibility).map(l => l.layer);
+            const features = appData.features.filter(f => visibleLayers.includes(f.properties.layerName));
+
+            map.getSource('geometry').setData({
+                'type': 'FeatureCollection',
+                'features': features
+            });
+
+        }, 300); // 300ms delay, adjust as needed
+
+
+        function buildSwitcher({ labelText, action, colorCircle = false, checked = true }) {
+
+            const div = document.createElement("div")
+            div.className = "switcher-div"
+            div.style.cursor = "pointer"
+
+            const label = document.createElement("label")
+            label.className = "switch"
+
+            const checkbox = document.createElement("input")
+            checkbox.type = "checkbox"
+            checkbox.checked = checked
+
+            // checkbox.addEventListener("input", () => {
+            //     if (typeof action === "function") {
+            //         action(checkbox.checked)
+            //     }
+            // })
+
+            div.addEventListener("click", () => {
+                checkbox.checked = !checkbox.checked
+                if (typeof action === "function") {
+                    action(checkbox.checked)
+                }
+            })
+
+            function turnOn() {
+                checkbox.checked = true
+                if (typeof action === "function") {
+                    action(checkbox.checked)
+                }
+            }
+
+            function turnOff() {
+                checkbox.checked = false
+                if (typeof action === "function") {
+                    action(checkbox.checked)
+                }
+            }
+
+            const color = document.createElement("div")
+            color.style.width = "10px"
+            color.style.height = "10px"
+            color.style.backgroundColor = colorCircle
+            color.style.borderRadius = "10px"
+            color.style.border = "1px solid #2196f3"
+
+            const span = document.createElement("span")
+            span.className = "slider round"
+
+            const text = document.createElement("div")
+            text.innerText = labelText
+
+            label.appendChild(checkbox)
+            label.appendChild(span)
+
+            div.appendChild(label)
+            if (colorCircle) div.appendChild(color)
+            div.appendChild(text)
+
+            return { nodeElement: div, turnOn, turnOff }
+        }
+    </script>
+
+</body>
+
+</html>
