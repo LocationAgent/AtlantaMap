@@ -1,23 +1,22 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Extrude polygons for 3D indoor mapping</title>
-    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <title>Atlanta Development Map - Mapbox</title>
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" rel="stylesheet">
+    <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.2/mapbox-gl-geocoder.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.js"></script>
-
-    <script src="js/togeojson.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.0/jszip.min.js"></script>
-
-    <script
-        src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.min.js"></script>
-    <link rel="stylesheet"
-        href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.3/mapbox-gl-geocoder.css"
-        type="text/css">
-
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.2/mapbox-gl-geocoder.min.js"></script>
+    <script src="https://unpkg.com/togeojson@0.16.0/dist/togeojson.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/leaflet.js"></script>
+    <script src="https://api.tiles.mapbox.com/mapbox.js/plugins/leaflet-omnivore/v0.3.4/leaflet-omnivore.min.js"></script>
     <style>
+        #header {
+            font-family: Montserrat, sans-serif;
+            text-align: left;
+ border: 2px solid black; }
+
         body {
             margin: 0;
             padding: 0;
@@ -130,6 +129,9 @@
         }
 
         #header {
+            font-family: Montserrat, sans-serif;
+            text-align: left;
+
             /* background: #2196f3; */
             /* color: white; */
             padding: 10px;
@@ -235,7 +237,7 @@
 
 <body>
     <div id="container">
-        <div id="header">Atlanta Development Map</div>
+        <div id="header">The Location Agent </div>
         <div id="map"></div>
     </div>
 
@@ -256,7 +258,7 @@
                     fill="#ffffff" />
             </g>
         </svg>
-        Data layers
+        Map Legend
     </div>
     <div id="layers"></div>
 
@@ -285,7 +287,7 @@
         const map = new mapboxgl.Map({
             container: 'map',
             // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
-            style: 'mapbox://styles/mapbox/light-v11',
+            style: 'mapbox://styles/mapbox/mapbox-streets-v12',
             center: { lng: -84.39489491038259, lat: 33.78638842087517 },
             zoom: 12,
         });
